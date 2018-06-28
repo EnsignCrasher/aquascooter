@@ -15,6 +15,9 @@ Servo esc;
 int i_speed = 0;
 int esc_thr = 20;
 bool ledState = false;
+float voltMultiplier = 4.1602;
+float cutOfVoltage = 14.0;
+float turnDownVoltage = 15.0;
 
 struct taskDefinition{
   long lastUpdate = 0;
@@ -97,6 +100,13 @@ void setLEDcycle(){
   }
 }
 
+float getVoltage(){
+  float readVoltage = analogRead(voltPin);
+  float realVoltage = (readVoltage * 5/1024) /*actual messured Voltage 0V-5V*/ * voltMultiplier /* real voltage 0v - 16,4V */;
+  
+  return realVoltage;
+}
+
 void setup() {
   // put your setup code here, to run once:
   pinMode(voltPin, INPUT);
@@ -112,6 +122,7 @@ void setup() {
 void loop() {
   if(isCalled(updateButton))
     speedSwitch.updateState();
+    
 #ifdef calibrateESC
   if(!speedSwitch.state)
     esc.write(20);
@@ -130,12 +141,25 @@ void loop() {
       i_speed++;
     }else if(!speedSwitch.state && i_speed > 0){
       //dprintf("decrease speed");
-      if(i_speed > 125)
+      if(i_speed > 125){
         i_speed = 125;
+      }
       i_speed--;
     }
   }
 
+  float actVoltage = getVoltage();
+  dprintf("Messured voltage: " + String(actVoltage) + "V");
+  if(actVoltage > 0 && actVoltage < turnDownVoltage){
+    dprintf("Voltage is below turnDownVoltage: " + String(actVoltage) + "V");
+    float maxSpeedPerc = (actVoltage-cutOfVoltage)/(turnDownVoltage-cutOfVoltage);
+    dprintf("maxPerc " + String(maxSpeedPerc) + "%");
+    if(i_speed > (maxSpeedPerc*255))
+      i_speed = (maxSpeedPerc*255);
+  }else if(actVoltage > 0 && actVoltage < cutOfVoltage){
+    dprintf("Voltage is below cutOfVoltage: " + String(actVoltage) + "V");
+    i_speed = 0;
+  }
 
   if(isCalled(updateESC))
   {
